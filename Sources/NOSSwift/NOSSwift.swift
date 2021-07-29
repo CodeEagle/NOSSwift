@@ -4,7 +4,7 @@ import FoundationNetworking
 #endif
 import OpenCombine
 import OpenCombineFoundation
-import CryptoKit
+import Crypto
 
 public final class NOS {
     static let shared = NOS()
