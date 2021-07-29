@@ -1,5 +1,5 @@
 import XCTest
-import CryptoKit
+import Crypto
 import OpenCombine
 @testable import NOSSwift
 
