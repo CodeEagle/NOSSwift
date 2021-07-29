@@ -14,6 +14,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/OpenCombine/OpenCombine.git", from: "0.12.0"),
+        .package(url: "https://github.com/apple/swift-crypto.git", from: "1.1.6"),
 
     ],
     targets: [
@@ -23,6 +24,7 @@ let package = Package(
             name: "NOSSwift",
             dependencies: [
                 .product(name: "OpenCombineShim", package: "OpenCombine"),
+                .product(name: "Crypto", package: "swift-crypto")
             ]),
         .testTarget(
             name: "NOSSwiftTests",
