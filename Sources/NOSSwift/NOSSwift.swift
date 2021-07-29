@@ -25,29 +25,73 @@ public final class NOS {
     }
     
     public static func resourceURL(for name: String) -> URL {
-        var u = URL(string: shared.config.endpoint)!
+        var u = URL(string: shared.config.host)!
         u.appendPathComponent(shared.config.defaultBucket)
         u.appendPathComponent(name)
         return u
     }
     
     public static func upload(data: Data, name: String) -> AnyPublisher<(data: Data, response: URLResponse), URLError> {
-        var header: [String: String] = [:]
-        header["date"] = formatDate()
-        header["content-length"] = "\(data.count)"
-        let res = ResourceObject(bucket: shared.config.defaultBucket, objectKey: name)
-        let sign = signature(secretKey: shared.config.accessSecret, method: "PUT", headers: header, resource: res)
-        header["authorization"] = "NOS \(shared.config.accessKey):\(sign)"
-        var url = URL(string: shared.config.endpoint)!
-        url.appendPathComponent(res.uri())
+        let method = "PUT"
+        let (header, res) = constructHeader(for: name, contentLength: data.count, method: method)
+        let url = constructURL(res: res)
         var req = URLRequest(url: url)
         req.httpMethod = "PUT"
         header.forEach { kv in
             req.addValue(kv.value, forHTTPHeaderField: kv.key)
         }
         req.httpBody = data
-        req.addValue("\(res.bucket).nos.netease.com", forHTTPHeaderField: "host")
+        req = constructHost(req, res: res, host: url.host!)
         return shared.session.ocombine.dataTaskPublisher(for: req).eraseToAnyPublisher()
+    }
+    
+    public static func delete(name: String) -> AnyPublisher<(data: Data, response: URLResponse), URLError>  {
+        let method = "DELETE"
+        let (header, res) = constructHeader(for: name, method: method)
+        let url = constructURL(res: res)
+        var req = URLRequest(url: url)
+        req.httpMethod = method
+        header.forEach { kv in
+            req.addValue(kv.value, forHTTPHeaderField: kv.key)
+        }
+        req = constructHost(req, res: res, host: url.host!)
+        return shared.session.ocombine.dataTaskPublisher(for: req).eraseToAnyPublisher()
+    }
+    
+    static func constructHost(_ req: URLRequest, res: ResourceObject, host: String) -> URLRequest {
+        var re = req
+        if shared.config.isSubDomain {
+            re.addValue(host, forHTTPHeaderField: "host")
+        } else {
+            re.addValue("\(res.bucket).\(host)", forHTTPHeaderField: "host")
+        }
+        return re
+    }
+    
+    static func constructURL(res: ResourceObject) -> URL {
+        let u = URL(string: shared.config.endpoint)!
+        let realEndPoint: String = {
+            if shared.config.isSubDomain {
+                return "\(u.scheme!)://\(shared.config.defaultBucket).\(u.host!)"
+            } else {
+                return shared.config.endpoint
+            }
+        }()
+        var url = URL(string: realEndPoint)!
+        url.appendPathComponent(res.uri())
+        return url
+    }
+    
+    static func constructHeader(for name: String, contentLength: Int? = nil, method: String) -> ([String : String], ResourceObject) {
+        var header: [String: String] = [:]
+        header["date"] = formatDate()
+        if let length = contentLength {
+            header["content-length"] = "\(length)"
+        }
+        let res = ResourceObject(bucket: shared.config.defaultBucket, objectKey: name)
+        let sign = signature(secretKey: shared.config.accessSecret, method: method, headers: header, resource: res)
+        header["authorization"] = "NOS \(shared.config.accessKey):\(sign)"
+        return (header, res)
     }
     
     static func sha256(salt: String, data: String) -> String {
@@ -129,12 +173,17 @@ extension NOS {
         public let accessSecret: String
         public let endpoint: String
         public let defaultBucket: String
+        public let cdnDomain: String?
+        public var host: String { cdnDomain ?? endpoint }
+        public var isSubDomain: Bool
         
-        public init(accessKey: String, accessSecret: String, endpoint: String, defaultBucket: String) {
+        public init(accessKey: String, accessSecret: String, endpoint: String, defaultBucket: String, cdnDomain: String? = nil, isSubDomain: Bool = false) {
             self.accessKey = accessKey
             self.accessSecret = accessSecret
             self.endpoint = endpoint
             self.defaultBucket = defaultBucket
+            self.cdnDomain = cdnDomain
+            self.isSubDomain = isSubDomain
         }
         
         static let empty = Config(accessKey: "", accessSecret: "", endpoint: "", defaultBucket: "")

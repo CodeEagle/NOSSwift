@@ -3,22 +3,18 @@ import CryptoKit
 import OpenCombine
 @testable import NOSSwift
 
+var cancelBags: Set<AnyCancellable> = []
+let env = ProcessInfo.processInfo.environment
+var accessKey: String { env["accessKey"]! }
+var accessSecret: String { env["accessSecret"]! }
+var endpoint: String { env["endpoint"]! }
+var defaultBucket: String { env["defaultBucket"]! }
+
 final class NOSSwiftTests: XCTestCase {
-    var cancelBags: Set<AnyCancellable> = []
-    let env = ProcessInfo.processInfo.environment
-    var accessKey: String { env["accessKey"]! }
-    var accessSecret: String { env["accessSecret"]! }
-    var endpoint: String { env["endpoint"]! }
-    var defaultBucket: String { env["defaultBucket"]! }
 
     override class func setUp() {
         super.setUp()
-        let env = ProcessInfo.processInfo.environment
-        let accessKey = env["accessKey"]!
-        let accessSecret = env["accessSecret"]!
-        let endpoint = env["endpoint"]!
-        let defaultBucket = env["defaultBucket"]!
-        NOS.initSDK(NOS.Config(accessKey: accessKey, accessSecret: accessSecret, endpoint: endpoint, defaultBucket: defaultBucket))
+        NOS.initSDK(NOS.Config(accessKey: accessKey, accessSecret: accessSecret, endpoint: endpoint, defaultBucket: defaultBucket, cdnDomain: nil))
     }
 
     func testResourceStr() {
@@ -95,12 +91,23 @@ final class NOSSwiftTests: XCTestCase {
     
     func testUpload() {
         asyncTest { e in
+            let name = "hello.text"
             let hello = "hello world".data(using: .utf8)!
-            NOS.upload(data: hello, name: "hello.text").sink { re in
+            NOS.upload(data: hello, name: name).sink { re in
                 print(re)
-                e.fulfill()
+                NOS.delete(name: name).sink { delere in
+                    print(delere)
+                    e.fulfill()
+                } receiveValue: { info in
+                    print(info)
+                    let resp = info.1 as! HTTPURLResponse
+                    assert(resp.statusCode == 200)
+                }.store(in: &cancelBags)
             } receiveValue: { info in
                 print(info)
+                print(String.init(data: info.0, encoding: .utf8)!)
+                let resp = info.1 as! HTTPURLResponse
+                assert(resp.statusCode == 200)
             }.store(in: &cancelBags)
         }
     }
