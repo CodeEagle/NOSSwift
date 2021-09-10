@@ -26,7 +26,9 @@ public final class NOS {
     
     public static func resourceURL(for name: String) -> URL {
         var u = URL(string: shared.config.host)!
-        u.appendPathComponent(shared.config.defaultBucket)
+        if shared.config.isSubDomain == false {
+            u.appendPathComponent(shared.config.defaultBucket)
+        }
         u.appendPathComponent(name)
         return u
     }
